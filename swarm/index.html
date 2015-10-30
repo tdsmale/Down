@@ -1,0 +1,332 @@
+<!--
+To change this template, choose Tools | Templates
+and open the template in the editor.
+-->
+<!DOCTYPE html>
+<html>
+	<head>
+		<title></title>
+		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+		<script type="text/javascript" src="../downconcat.js"></script>
+		<style type="text/css">
+			#contain {
+				width: 800px;
+				margin: 0 auto;
+			}
+			
+			#instructions, #score {
+				color: #fff;
+				font-family: sans-serif;
+				font-size: 11px;
+				white-space: 5px;
+				text-align: center;
+			}
+			
+			#game {
+				background-color: #000000;
+				border: 1px solid #FFF;
+			}
+			
+			body {
+				background-color: #000000;
+			}
+			
+			h1 {
+				text-align: center;
+				font-family: sans-serif;
+				white-space: 15px;
+				font-size: 15px;
+				color: #fff;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="contain">
+			<div id="score"></div>
+			<canvas id="game" width="800" height="600"></canvas>
+			<div id="instructions">WASD to move, SPACE to fire, ARROWS to rotate.</div>
+		</div>
+		<script type="text/javascript">
+			
+			Down.start('game', function() {
+				var world = new Down.World();
+				Down.addWorld(world);
+			
+				var limit = 100;
+				var num = 0;
+				var numKilled = 0;
+			
+				var player = new Down.Actor();
+				player.name = 'player';
+				player.shape.size.x = 50;
+				player.shape.size.y = 50;
+				player.shape.position.x = 400 - player.shape.size.x / 2;
+				player.shape.position.y = 500 - player.shape.size.y - player.shape.size.y;
+				player.shape.origin.x = 25;
+				player.shape.origin.y = 25;
+				player.sprite = new Down.Sprite();
+				player.sprite.image.src = 'triangle.png';
+				player.sprite.frameSize.x = 50;
+				player.sprite.frameSize.y = 50;
+				player.immovable = true;
+				player.shape.rotation = Math.PI;
+				var speed = 5;
+				var rotation = 0.1;
+				var ammo = 50;
+			
+				var controls = {};
+				controls[Down.Keys.D] = [];
+				controls[Down.Keys.A] = [];
+				controls[Down.Keys.W] = [];
+				controls[Down.Keys.S] = [];
+				controls[Down.Keys.LEFT] = [];
+				controls[Down.Keys.RIGHT] = [];
+				controls[Down.Keys.SPACE] = [];
+			
+				controls[Down.Keys.D].push(world.addKeyPressEvent(Down.Keys.D, function() {
+					player.move(speed, 0);
+				}));
+			
+				controls[Down.Keys.D].push(world.addKeyUpEvent(Down.Keys.D, function() {
+					player.move(-speed, 0);
+				}));
+			
+				controls[Down.Keys.A].push(world.addKeyPressEvent(Down.Keys.A, function() {
+					player.move(-speed, 0);
+				}));
+			
+				controls[Down.Keys.A].push(world.addKeyUpEvent(Down.Keys.A, function() {
+					player.move(speed, 0);
+				}));
+			
+				controls[Down.Keys.W].push(world.addKeyPressEvent(Down.Keys.W, function() {
+					player.move(0, -speed);
+				}));
+			
+				controls[Down.Keys.W].push(world.addKeyUpEvent(Down.Keys.W, function() {
+					player.move(0, speed);
+				}));
+			
+				controls[Down.Keys.S].push(world.addKeyPressEvent(Down.Keys.S, function() {
+					player.move(0, speed);
+				}));
+			
+				controls[Down.Keys.S].push(world.addKeyUpEvent(Down.Keys.S, function() {
+					player.move(0, -speed);
+				}));
+			
+				controls[Down.Keys.LEFT].push(world.addKeyPressEvent(Down.Keys.LEFT, function() {
+					player.shape.rotate(-rotation);
+				}));
+			
+				controls[Down.Keys.RIGHT].push(world.addKeyPressEvent(Down.Keys.RIGHT, function() {
+					player.shape.rotate(rotation);
+				}));
+			
+				world.addTickEvent(function() {
+					if(player.force.x > 0) {
+						player.velocity.x-=0.1;
+					}
+					if(player.force.x < 0) {
+						player.velocity.x+=0.1;
+					}
+					if(player.force.y > 0) {
+						player.velocity.y-=0.1;
+					}
+					if(player.force.y < 0) {
+						player.velocity.y+=0.1;
+					}
+				
+				});
+			
+				var shoot = world.addKeyDownEvent(Down.Keys.SPACE, function() {
+					if(ammo <= 0) {
+						//return;
+					}
+					ammo--;
+				
+					var laser = new Down.Actor();
+					laser.immovable = true;
+					laser.shape.size.x = 20;
+					laser.shape.size.y = 25;
+					laser.shape.origin.x = 2.5;
+					laser.shape.position.x = player.shape.position.x + player.shape.origin.x;
+					laser.shape.position.y = player.shape.position.y + player.shape.origin.y + player.shape.size.y;
+					laser.shape.position.rotateAroundPoint(player.shape.rotation, 
+						player.shape.position.x + player.shape.origin.x,
+						player.shape.position.y + player.shape.origin.y);
+					laser.shape.rotation = player.shape.rotation;
+					laser.colour = '#FF0000';
+					laser.stroke = '#FFF';
+					laser.isLaser = true;
+				
+					laser.speed = laser.shape.position.subtractVector(player.shape.position.addVector(player.shape.origin));
+				
+					//laser.speed = laser.speed.getNormalisedVector();
+				
+					//laser.speed = laser.speed.getNormalisedVector();
+				
+				
+					laser.callbackIndex = world.addTickEvent(function() {
+						var growthSpeed = 10;
+						var maxSize = 200;
+						laser.move(laser.speed.x, laser.speed.y);
+						if(laser.shape.size.y < maxSize) {
+							laser.shape.size.y += growthSpeed;
+						}
+					
+						if(!laser.shape.collideRectangle(world.camera)) {
+							world.removeActor(laser.name);
+							world.removeTickEvent(laser.callbackIndex);
+						};
+					});
+				
+					laser.addCollisionEnterEvent(function(actor, collision) {
+						if(actor.isLaser == undefined) {
+						
+							//world.removeActor(laser.name);
+						
+							if(actor.isEvil) {
+								num--;
+								numKilled++;
+							}
+							world.removeActor(actor.name);
+						}
+					});
+				
+					world.addActor(laser);
+				});
+			
+				var initialSpawn = true;
+			
+				world.addTickEvent(function() {
+				
+					if( num >= limit) {
+						initialSpawn = false;
+						return;
+					}
+				
+					num++;
+				
+					var rand = Math.floor(Math.random() * 3) + 1;
+				
+					var evil = new Down.Actor();
+					if(initialSpawn) {
+						evil.shape.position.x = Math.floor(Math.random() * 400) + 250;
+					
+					} else {
+						for(var i = 0; i < world.actors.length; i++) {
+							if(!world.actors[i]) {
+								continue;
+							}
+
+							if(world.actors[i].isEvil) {
+								evil.shape.position.x = world.actors[i].shape.position.x;
+								evil.shape.position.y = world.actors[i].shape.position.y;
+							}
+						}
+					}
+				
+					evil.shape.size.x = 20;
+					evil.shape.size.y = 20;
+					evil.speed = 1;
+					evil.isEvil = true;
+					world.addTickEvent(function() {
+						if(evil.shape.position.x > player.shape.position.x) {
+							evil.force.x-=evil.speed;
+						}
+					
+						if(evil.shape.position.x < player.shape.position.x) {
+							evil.force.x+=evil.speed;
+						}
+					
+						if(evil.shape.position.y > player.shape.position.y) {
+							evil.force.y-=evil.speed;
+						}
+					
+						if(evil.shape.position.y < player.shape.position.y) {
+							evil.force.y+=evil.speed;
+						}
+					});
+				
+					evil.addCollisionEnterEvent(function(actor) {
+						if(actor.name == 'player') {
+							evil.force.x += actor.velocity.x * 0.1;
+							evil.force.y += actor.velocity.y * 0.1;
+							//world.removeActor(actor.name);
+							//world.removeKeyDownEvent(Down.Keys.SPACE, shoot);
+						
+							for(var i in controls) {
+								for(var j = 0; j < controls[i].length; j++) {
+									world.removeKeyDownEvent(i, controls[i][j]);
+									world.removeKeyUpEvent(i, controls[i][j]);
+								}
+							}
+						}
+					})
+					world.addActor(evil);
+				});
+			
+				world.addActor(player);
+				world.addTickEvent(function() {
+					document.getElementById('score').innerHTML = 'Score: ' + numKilled + ' | Left to Kill: ' + num + ' | Time: ' 
+						+ (Down.elapsedTime);
+						//+ '<BR />AMMO: ' + ammo;
+				
+					if(Down.elapsedTime % 100 == 0) {
+						ammo++;
+					}
+				
+					for(var i = 0; i < world.actors.length; i++) {
+						var actor = world.actors[i];
+						if(!actor) {
+							continue;
+						}
+					
+						if(actor.isLaser) {
+							continue;
+						}
+					
+						var collide = false;
+					
+						if(actor.shape.position.x < 0) {
+							actor.shape.position.x = 0;
+							collide = true;
+						}
+					
+						if(actor.shape.position.y < 0) {
+							actor.shape.position.y = 0;
+							collide = true;
+						}
+					
+						if(actor.shape.position.x + actor.shape.size.x > Down.canvas.width) {
+							actor.shape.position.x = Down.canvas.width - actor.shape.size.x;
+							collide = true;
+						}
+					
+						if(actor.shape.position.y + actor.shape.size.y > Down.canvas.height) {
+							actor.shape.position.y = Down.canvas.height - actor.shape.size.y;
+							collide = true;
+						}
+					
+						if(collide) {
+							actor.velocity.x = -actor.velocity.x * 0.5;
+							actor.velocity.y = -actor.velocity.y * 0.5;
+						}
+					}
+				});
+			
+				var home = new Down.Actor();
+				home.shape.size.x = 800;
+				home.shape.size.y = 100;
+				home.shape.position.x = 0;
+				home.shape.position.y = 500;
+				home.colour = '#00FF00';
+				home.immovable = true;
+				home.zIndex = 500;
+				//world.addActor(home);
+			
+			});
+		</script>
+	</body>
+</html>

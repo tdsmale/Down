@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+		<script type="text/javascript" src="../downconcat.js"></script>
+		<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js" ></script>
+		<style type="text/css">
+			body {
+				background-color: #000;
+				color: #FFF;
+				font-family: sans-serif;
+				font-size: 11px;
+			}
+			
+			#game {
+				background-color: #FFF;
+				display: none;
+			}
+		</style>
+        <title>Float</title>
+    </head>
+    <body>
+		<div style="width: 800px; height: 600px; margin: 0 auto; background-color: #fff">
+			<canvas id="game" width="800" height="600"></canvas>
+			<p style="width: 100%; text-align: center">WASD</p>
+		</div>
+		<script type="text/javascript">
+			function rand(min, max) {
+				return Math.floor(Math.random() * (max - min + 1)) + min;
+			}
+			
+			$("#game").fadeIn(5000);
+			
+			Down.debug = false;
+			
+			Down.start('game', function() {
+				var gravity = 0;
+				var playerWidth = 25;
+				var playerRotationSpeed = 0.005;
+				var playerForceSpeed = 5;
+				var particleWidth = 10;
+				var particleRotation = 0.10;
+				var particleZIndex = -1;
+				var particlePositionOffset = new Down.Vector2(-25, 25);
+				var particleEmissionSpeed = 5;
+				var particleDeathSpeed = 550;
+				var pickupSpawnSpeed = 50;
+				var maxParticles = 150;
+				var maxPickups = 20;
+				var numPickups = 0;
+				var time = 0;
+				var particleEmissionTime = 0;
+				var particleDeathTime = 0;
+				var pickupSpawnTime = 0;
+				var finished = false;
+				
+				var world = new Down.World('game');
+				world.gravity.y = gravity;
+				Down.addWorld(world);
+				
+				var left = Down.Factory.rectangleActor(-50, -50, 50, Down.canvas.height, 'leftWall');
+				var right = Down.Factory.rectangleActor(Down.canvas.width, 0, 50, Down.canvas.height, 'rightWall');
+				var top = Down.Factory.rectangleActor(0, -50, Down.canvas.width, 50, 'topWall');
+				var bottom = Down.Factory.rectangleActor(0, Down.canvas.height, Down.canvas.width, 50, 'bottomWall');
+				left.colour = '#000';
+				right.colour = '#000';
+				top.colour = '#000';
+				bottom.colour = '#000';
+				
+				world.addActor(left);
+				world.addActor(right);
+				world.addActor(top);
+				world.addActor(bottom);
+				
+				var player = Down.Factory.triangleActor(Down.canvas.width / 2, Down.canvas.height / 2, playerWidth, 'player');
+				player.stroke = '#000';
+				player.shape.origin.x = Down.canvas.width / 2;
+				player.shape.origin.y = Down.canvas.height / 2;
+				world.addActor(player);
+				
+				Down.setCurrentWorld('game');
+				
+				world.addKeyPressEvent(Down.Keys.S, function() {
+					player.force.y += playerForceSpeed;
+					player.rotate(playerRotationSpeed);
+				}, 'moveDown');
+
+				world.addKeyPressEvent(Down.Keys.W, function() {
+					player.force.y -= playerForceSpeed;
+					player.rotate(-playerRotationSpeed);
+				}, 'moveUp');
+
+				world.addKeyPressEvent(Down.Keys.A, function() {
+					player.force.x -= playerForceSpeed;
+					player.rotate(-playerRotationSpeed);
+				}, 'moveLeft');
+
+				world.addKeyPressEvent(Down.Keys.D, function() {
+					player.force.x += playerForceSpeed;
+					player.rotate(playerRotationSpeed);
+				}, 'moveRight');
+				
+				world.addKeyPressEvent(Down.Keys.SPACE, function() {
+					maxParticles++;
+				});
+				
+				var baddieEmitter = function() {
+					this.baddies = [];
+					this.position = new Down.Vector2();
+				
+					this.killBaddie = function() {
+						var baddie = this.baddies.shift();
+						if(baddie != undefined && baddie.name != undefined) {
+							world.removeActor(baddie.name);
+						}
+					}
+				
+					this.addBaddie = function() {
+						if(!maxParticles) {
+							return;
+						}
+						
+						while(this.baddies.length >= maxParticles) {
+							this.killBaddie();
+						}
+						
+						var x = this.position.x + rand(particlePositionOffset.x, particlePositionOffset.y);
+						var y = this.position.y + rand(particlePositionOffset.x, particlePositionOffset.y);
+						var sx = particleWidth * Math.random();
+						var rot = particleRotation * 2 * Math.random();
+
+						var actor = Down.Factory.triangleActor(x, y, sx, Down.elapsedTime);
+						actor.shape.origin.x = player.shape.origin.x;
+						actor.shape.origin.y = player.shape.origin.y;
+						actor.zIndex = particleZIndex;
+						actor.colour = 'black';
+						actor.ghost = true;
+						actor.baddie = true;
+						actor.rotate(rot);
+
+						world.addActor(actor);
+						this.baddies.push(actor);
+					}
+				};
+				
+				var playerEmitter = new baddieEmitter();
+				
+				function addPickup() {
+					var x = rand(0, Down.canvas.width);
+					var y = rand(0, Down.canvas.height);
+					var sx = particleWidth * Math.random();
+					var rot = particleRotation * 2 * Math.random();
+
+					var actor = Down.Factory.triangleActor(x, y, sx, Down.elapsedTime * Math.random() * new Date().getUTCMilliseconds());
+					actor.shape.origin.x = x + rand(particlePositionOffset.x, particlePositionOffset.y);
+					actor.shape.origin.y = y + rand(particlePositionOffset.x, particlePositionOffset.y);
+					actor.rotate(rot);
+					actor.colour = '#FFF';
+					
+					actor.pickup = true;
+					actor.ghost = true;
+					actor.zIndex = -10;
+					actor.caught = false;
+					
+					var j = 0;
+					var newName = Down.elapsedTime * Math.random() * new Date().getUTCMilliseconds();
+					
+					world.addTickAfterEvent(function() {
+						j += Down.interval;
+
+						var hex = ['F', 'E', 'D', 'C', 'B', 'A', '9', '8', '7', '6', '5', '4', '3', '2', '1', '0'];
+
+						var colour = "#";
+						var index = Math.floor(j / 100);
+						for(var k = 0; k < 3; k++) {
+							colour += hex[index];
+						}
+
+						actor.colour = colour;
+
+						if(j > 1500) {
+							j = 0;
+							world.removeTickAfterEvent(newName);
+						}
+					}, newName);
+					
+					actor.addCollisionEnterEvent(function(actor2, collision) {
+						if(actor2.baddie == true && !finished) {
+							numPickups--;
+							world.removeActor(actor.name);
+							playerEmitter.max++;
+						}
+					});
+					
+					world.addActor(actor);
+					numPickups++;
+				}
+				
+				world.addTickEvent(function() {
+					time += Down.interval;
+					particleEmissionTime += Down.interval;
+					particleDeathTime += Down.interval;
+					pickupSpawnTime += Down.interval;
+
+					playerEmitter.position.x = player.shape.origin.x;
+					playerEmitter.position.y = player.shape.origin.y;
+				   
+					if(particleDeathTime > particleDeathSpeed) {
+						maxParticles--;
+						if(maxParticles < 0) {
+							maxParticles = 0;
+						}
+						particleDeathTime = 0;
+					}
+					
+					if(particleEmissionTime > particleEmissionSpeed) {
+						playerEmitter.addBaddie();
+						particleEmissionSpeed = 0;
+					}
+					
+					if(pickupSpawnTime > pickupSpawnSpeed && numPickups < maxPickups) {
+						addPickup();
+						pickupSpawnTime = 0;
+					}
+					
+					if(maxParticles <= 0) {
+						$('#game').fadeOut(3000);
+						world.removeKeyPressEvent(Down.Keys.W, 'moveUp');
+						world.removeKeyPressEvent(Down.Keys.S, 'moveDown');
+						world.removeKeyPressEvent(Down.Keys.A, 'moveLeft');
+						world.removeKeyPressEvent(Down.Keys.D, 'moveRight');
+					}
+				});
+			});
+		</script>
+    </body>
+</html>
